@@ -6,6 +6,7 @@ const global = {
         type: '',
         page: 1,
         totalPages: 1,
+        totalResults: 0,
     }
 };
 
@@ -25,9 +26,9 @@ async function fetchData(endPoint) {
 };
 
 // search movie/tv show data (fetch API)
-async function searchAPIData(type, term) {
+async function searchAPIData(type, term, page=1) {
     showSpinner();
-    const res = await fetch(`${apiURL}/search/${type}?api_key=${key}&language=en-US&query=${term}`);
+    const res = await fetch(`${apiURL}/search/${type}?api_key=${key}&language=en-US&query=${term}&page=${page}`);
     const data = await res.json();
     hideSpinner();
     return data;
@@ -224,6 +225,48 @@ async function displaySlider() {
     });
 };
 
+// create and display pagination
+function displayPagination() {
+    const page = document.querySelector('#pagination');
+    const div = document.createElement('div');
+
+    div.classList.add('pagination');
+    div.innerHTML =  `
+        <button class="btn btn-primary" id="prev">Prev</button>
+        <button class="btn btn-primary" id="next">Next</button>
+        <div class="page-counter">Page ${global.search.page} of ${global.search.totalPages}</div>`;
+    
+    page.appendChild(div);
+
+    // disable prev and next
+    if (global.search.page === 1) {
+        document.querySelector('#prev').disabled = true;
+    };
+
+    if (global.search.page === global.search.totalPages) {
+        document.querySelector('#next').disabled = true;
+    };
+
+    // next page
+    async function nextPage () {
+        global.search.page++;
+        const { results, total_pages } = await searchAPIData(global.search.type, global.search.term, global.search.page);
+        displayResults(results);
+    };
+
+    // previous page
+    async function previousPage () {
+        global.search.page--;
+        const { results, total_pages } = await searchAPIData(global.search.type, global.search.term, global.search.page);
+        console.log(results);
+        displayResults(results);
+    };
+
+    // button listeners
+    document.querySelector('#next').addEventListener('click', nextPage);
+    document.querySelector('#prev').addEventListener('click', previousPage)
+};
+
 // show movie information
 async function getMovieInfo () {
     const movieDetails = document.querySelector('#movie-details');
@@ -351,6 +394,48 @@ async function getTVShowInfo () {
     showDetails.appendChild(divBottom);
 };
 
+// show search results
+function displayResults (results) {
+    const resultsHeading = document.querySelector('#search-results-heading');
+    const showResults = document.querySelector('#search-results');
+    const pagination = document.querySelector('#pagination');
+
+    // clean the window
+    resultsHeading.innerHTML = '';
+    showResults.innerHTML = '';
+    pagination.innerHTML = '';
+
+    results.forEach(result => {
+        const div = document.createElement('div');
+        div.classList.add('card');
+
+        div.innerHTML = `
+            <a href="${global.search.type}-details.html?id=${result.id}">
+                ${result.poster_path
+                    ? `<img src="https://image.tmdb.org/t/p/w500${result.poster_path}" class="card-img-top" alt="${result.name}" />`
+                    : `<img src="../images/no-image.jpg" class="card-img-top" alt="${result.name}" />`
+                }
+            </a>
+            <div class="card-body">
+                <h5 class="card-title">${global.search.type === 'movie'
+                    ? result.title
+                    : result.name
+                }
+                </h5>
+                <p class="card-text">
+                <small class="text-muted">Release: ${global.search.type === 'movie'
+                    ? result.release_date
+                    : result.first_air_date}
+                </small>
+                </p>
+            </div>`
+        showResults.appendChild(div);
+    });
+    resultsHeading.innerHTML = `
+        <h2>${results.length} of ${global.search.totalResults} Results for ${global.search.term}</h2>`;
+    displayPagination();
+};
+
 // search movies/tv shows
 async function search () {
     const queryString = window.location.search;
@@ -359,41 +444,18 @@ async function search () {
     global.search.term = params.get('search-term');
     
     if (global.search.term !== '' && global.search.term !== null) {
-        const showResults = document.querySelector('#search-results');
-
-        const { results, total_pages, page} = await searchAPIData(global.search.type, global.search.term);
+        
+        const { results, total_pages, page, total_results} = await searchAPIData(global.search.type, global.search.term);
+        
+        global.search.page = page;
+        global.search.totalPages = total_pages;
+        global.search.totalResults = total_results;
 
         if (results.length === 0) {
             showErrorAlert('Not Results Found', 'error');
             returnMainPage();
         } else {
-            results.forEach(result => {
-                const div = document.createElement('div');
-                div.classList.add('card');
-    
-                div.innerHTML = `
-                    <a href="${global.search.type}-details.html?id=${result.id}">
-                        ${result.poster_path
-                            ? `<img src="https://image.tmdb.org/t/p/w500${result.poster_path}" class="card-img-top" alt="${result.name}" />`
-                            : `<img src="../images/no-image.jpg" class="card-img-top" alt="${result.name}" />`
-                        }
-                    </a>
-                    <div class="card-body">
-                        <h5 class="card-title">${global.search.type === 'movie'
-                            ? result.title
-                            : result.name
-                        }
-                        </h5>
-                        <p class="card-text">
-                        <small class="text-muted">Release: ${global.search.type === 'movie'
-                            ? result.release_date
-                            : result.first_air_date}
-                        </small>
-                        </p>
-                    </div>`
-    
-                showResults.appendChild(div);
-            });
+            displayResults(results);
         };
     } else {
         showErrorAlert('Please Enter An Entry', 'error');
