@@ -1,6 +1,12 @@
 // window route
 const global = {
     currentPage: window.location.pathname,
+    search: {
+        term: '',
+        type: '',
+        page: 1,
+        totalPages: 1,
+    }
 };
 
 // URL
@@ -9,13 +15,29 @@ const apiURL = 'https://api.themoviedb.org/3'
 // API key
 const key = '9c120a0bf16789c13f27cc2205cc0c5a'
 
-//fetch data
+// fetch data
 async function fetchData(endPoint) {
     showSpinner()
     const res = await fetch(`${apiURL}${endPoint}?api_key=${key}&language=en-US`);
     const data = await res.json()
     hideSpinner()
     return data
+};
+
+// search movie/tv show data (fetch API)
+async function searchAPIData(type, term) {
+    showSpinner();
+    const res = await fetch(`${apiURL}/search/${type}?api_key=${key}&language=en-US&query=${term}`);
+    const data = await res.json();
+    hideSpinner();
+    return data;
+};
+
+// return to the main page
+function returnMainPage () {
+    setTimeout(() => {
+        window.location.href = "/index.html"
+   }, 4000)
 };
 
 // highlight the nav link
@@ -133,6 +155,73 @@ function displayBackgroundImage(type, backgroundPath) {
     } else {
       document.querySelector('#show-details').appendChild(overlayDiv);
     };
+};
+
+// start the swiper
+function initSwiper() {
+    const swiper = new Swiper('.swiper', {
+        slidesPerView: 1,
+        spaceBetween: 30,
+        freeMode: true,
+        loop: true,
+        autoplay: {
+            delay: 4000,
+            disableOnInteraction: false,
+        },
+        breakpoints: {
+            500: {
+                slidesPerView: 2
+            },
+            700: {
+                slidesPerView: 3
+            },
+            1200: {
+                slidesPerView: 4
+            }
+        }
+    });
+};
+
+// show error alert
+function showErrorAlert (message, className) {
+    const alertEl = document.createElement('div');
+    alertEl.classList.add('alert', className);
+    alertEl.appendChild(document.createTextNode(message));
+    document.querySelector('#alert').appendChild(alertEl);
+
+    setTimeout(() => {
+        alertEl.remove();
+    }, 4000)
+};
+
+// Display slider movies
+async function displaySlider() {
+    const mainSlider = document.querySelector('.swiper-wrapper');
+    const { results } = await fetchData('/movie/now_playing');
+
+    results.forEach(movie => {
+        const slider = document.createElement('div');
+        slider.classList.add('swiper-slide');
+
+        slider.innerHTML = `
+            <a href="movie-details.html?id=${movie.id}">
+                ${movie.poster_path 
+                    ? `
+                    <img src="https://image.tmdb.org/t/p/w500${movie.poster_path}" 
+                    alt="${movie.title}" />`
+                    : `
+                    <img src="../images/no-image.jpg" 
+                    alt="${movie.title}" />`
+                }
+            </a>
+            <h4 class="swiper-rating">
+              <i class="fas fa-star text-secondary"></i> ${movie.vote_average} / 10
+            </h4>`
+
+        mainSlider.appendChild(slider);
+
+        initSwiper();
+    });
 };
 
 // show movie information
@@ -262,18 +351,69 @@ async function getTVShowInfo () {
     showDetails.appendChild(divBottom);
 };
 
+// search movies/tv shows
+async function search () {
+    const queryString = window.location.search;
+    const params = new URLSearchParams(queryString);
+    global.search.type = params.get('type');
+    global.search.term = params.get('search-term');
+    
+    if (global.search.term !== '' && global.search.term !== null) {
+        const showResults = document.querySelector('#search-results');
+
+        const { results, total_pages, page} = await searchAPIData(global.search.type, global.search.term);
+
+        if (results.length === 0) {
+            showErrorAlert('Not Results Found', 'error');
+            returnMainPage();
+        } else {
+            results.forEach(result => {
+                const div = document.createElement('div');
+                div.classList.add('card');
+    
+                div.innerHTML = `
+                    <a href="${global.search.type}-details.html?id=${result.id}">
+                        ${result.poster_path
+                            ? `<img src="https://image.tmdb.org/t/p/w500${result.poster_path}" class="card-img-top" alt="${result.name}" />`
+                            : `<img src="../images/no-image.jpg" class="card-img-top" alt="${result.name}" />`
+                        }
+                    </a>
+                    <div class="card-body">
+                        <h5 class="card-title">${global.search.type === 'movie'
+                            ? result.title
+                            : result.name
+                        }
+                        </h5>
+                        <p class="card-text">
+                        <small class="text-muted">Release: ${global.search.type === 'movie'
+                            ? result.release_date
+                            : result.first_air_date}
+                        </small>
+                        </p>
+                    </div>`
+    
+                showResults.appendChild(div);
+            });
+        };
+    } else {
+        showErrorAlert('Please Enter An Entry', 'error');
+        returnMainPage();
+    };
+};
+
 // initial function
 function init () {
     switch (global.currentPage) {
         case '/':
         case '/index.html':
             showPopularMovies();
+            displaySlider();
             break;
         case '/movie-details.html':
             getMovieInfo();
             break;
         case '/search.html':
-            console.log('search');
+            search();
             break;
         case '/shows.html':
             showPopularTVShows();
