@@ -56,6 +56,11 @@ function changeMoneyFormat (value) {
     return new Intl.NumberFormat().format(value);
 };
 
+// change the vote format
+function voteFormat(value) {
+    return Number(value.toFixed(1));
+};
+
 // show spinner
 function showSpinner () {
     const spinner = document.querySelector('.spinner');
@@ -159,7 +164,7 @@ function displayBackgroundImage(type, backgroundPath) {
 };
 
 // start the swiper
-function initSwiper() {
+function initSwiper(type) {
     const swiper = new Swiper('.swiper', {
         slidesPerView: 1,
         spaceBetween: 30,
@@ -195,32 +200,44 @@ function showErrorAlert (message, className) {
     }, 4000)
 };
 
-// Display slider movies
-async function displaySlider() {
+// Display slider movies/tv shows
+async function displaySlider(type) {
+    let results;
     const mainSlider = document.querySelector('.swiper-wrapper');
-    const { results } = await fetchData('/movie/now_playing');
 
-    results.forEach(movie => {
+    if (type === 'movie') {
+        const { results: data } = await fetchData(`/${type}/now_playing`);
+        results = data;
+    } else {
+        const { results: data } = await fetchData(`/${type}/airing_today`);
+        results = data;
+    };
+    
+    results.forEach(result => {
         const slider = document.createElement('div');
         slider.classList.add('swiper-slide');
 
         slider.innerHTML = `
-            <a href="movie-details.html?id=${movie.id}">
-                ${movie.poster_path 
+            <a href="${type}-details.html?id=${result.id}">
+                ${result.poster_path 
                     ? `
-                    <img src="https://image.tmdb.org/t/p/w500${movie.poster_path}" 
-                    alt="${movie.title}" />`
+                    <img src="https://image.tmdb.org/t/p/w500${result.poster_path}" 
+                    alt="${type === 'movie'
+                    ? result.title
+                    : result.name}"/>`
+
                     : `
                     <img src="../images/no-image.jpg" 
-                    alt="${movie.title}" />`
+                    alt="${type === 'movie'
+                    ? result.title
+                    : result.name}" />`
                 }
             </a>
             <h4 class="swiper-rating">
-              <i class="fas fa-star text-secondary"></i> ${movie.vote_average} / 10
+              <i class="fas fa-star text-secondary"></i> ${voteFormat(result.vote_average)} / 10
             </h4>`
 
         mainSlider.appendChild(slider);
-
         initSwiper();
     });
 };
@@ -301,7 +318,7 @@ async function getMovieInfo () {
             <h2>${movie.original_title}</h2>
             <p>
               <i class="fas fa-star text-primary"></i>
-              ${movie.vote_average} / 10
+              ${voteFormat(movie.vote_average)} / 10
             </p>
             <p class="text-muted">Release Date: ${movie.release_date}</p>
             <p>
@@ -364,7 +381,7 @@ async function getTVShowInfo () {
             <h2>${show.original_name}</h2>
             <p>
             <i class="fas fa-star text-primary"></i>
-            ${show.vote_average} / 10
+            ${voteFormat(show.vote_average)} / 10
             </p>
             <p class="text-muted">Release Date: ${show.first_air_date}</p>
             <p>
@@ -469,7 +486,7 @@ function init () {
         case '/':
         case '/index.html':
             showPopularMovies();
-            displaySlider();
+            displaySlider('movie');
             break;
         case '/movie-details.html':
             getMovieInfo();
@@ -479,6 +496,7 @@ function init () {
             break;
         case '/shows.html':
             showPopularTVShows();
+            displaySlider('tv');
             break;
         case '/tv-details.html':
             getTVShowInfo();
